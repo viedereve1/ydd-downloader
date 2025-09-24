@@ -1,0 +1,5 @@
+tools/ffmpeg/
+downloads/
+__pycache__/
+*.log
+push_with_token.ps1
