@@ -1,9 +1,10 @@
-﻿# --- YDD-Downloader ignore ---
+﻿*.exe
+*.dll
+*.bin
+*.mp4
+*.zip
+tools/
 downloads/
 __pycache__/
 *.log
 .DS_Store
-.tools/ffmpeg/
-# --------------------------------
-.tools/ffmpeg/bin/
-*.pyc
