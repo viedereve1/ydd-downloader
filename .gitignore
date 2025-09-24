@@ -1,0 +1,9 @@
+﻿# --- YDD-Downloader ignore ---
+downloads/
+__pycache__/
+*.log
+.DS_Store
+.tools/ffmpeg/
+# --------------------------------
+.tools/ffmpeg/bin/
+*.pyc

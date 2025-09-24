@@ -1,0 +1,47 @@
+﻿<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <title>YDD Downloader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>YDD Downloader</h1>
+
+    <div class="card">
+      <label>Colle un lien (YouTube, TikTok, Instagram, Facebook...)</label>
+      <input id="url" placeholder="https://..." />
+
+      <div class="row">
+        <label><input type="radio" name="mode" value="video" checked> Vidéo (MP4)</label>
+        <label><input type="radio" name="mode" value="audio"> Audio (MP3)</label>
+      </div>
+
+      <button id="btn">Télécharger</button>
+
+      <div id="msg" class="msg"></div>
+
+      <div id="progressBox" class="progress hidden">
+        <div id="bar" class="bar"></div>
+      </div>
+      <div id="progressText" class="progressText"></div>
+    </div>
+
+    <details class="help">
+      <summary>Besoin d'aide ?</summary>
+      <ul>
+        <li>Pour IG/FB/TikTok/YT protégés, placez un <b>cookies.txt</b> (format Netscape) à la racine.</li>
+        <li>Pour une vidéo MP4 YouTube, <b>ffmpeg</b> est recommandé pour la fusion audio+vidéo.</li>
+      </ul>
+    </details>
+
+    <h2>Historique</h2>
+    <div id="history"></div>
+    <button id="clear">Effacer l'historique</button>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
