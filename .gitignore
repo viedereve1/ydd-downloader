@@ -8,3 +8,6 @@ downloads/
 __pycache__/
 *.log
 .DS_Store
+
+sanitize_and_force_push.ps1
+push_with_token.ps1
