@@ -1,22 +1,18 @@
-# Dockerfile
+﻿# Dockerfile
 FROM python:3.11-slim
 
-# ffmpeg + utilitaires
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Déps d'abord pour le cache
-COPY requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt && \
-    pip install --upgrade yt-dlp
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -U pip \
+ && pip install --no-cache-dir -r requirements.txt
 
-# Code
 COPY . /app
 
-# Port standard Koyeb
-ENV PORT=8080
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:app"]
+EXPOSE 8080
+ENV PORT=8080 PYTHONUNBUFFERED=1
+CMD ["gunicorn", "-w", "2", "-k", "gthread", "-b", "0.0.0.0:8080", "app:app"]

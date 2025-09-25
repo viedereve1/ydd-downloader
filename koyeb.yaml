@@ -1,0 +1,16 @@
+﻿name: ydd-downloader
+services:
+  - name: web
+    type: web
+    ports:
+      - port: 8080
+        protocol: http
+    env:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    docker:
+      dockerfile: Dockerfile
+    git:
+      repo: https://github.com/viedereve1/ydd-downloader.git
+      branch: main
+      build_context: /
