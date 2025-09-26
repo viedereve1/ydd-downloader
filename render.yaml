@@ -2,7 +2,6 @@ services:
   - type: web
     name: ydd-downloader
     env: python
-    plan: free
     buildCommand: pip install -U pip && pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
