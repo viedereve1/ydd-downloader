@@ -1,4 +1,4 @@
-﻿services:
+services:
   - type: web
     name: ydd-downloader
     env: python
@@ -8,4 +8,3 @@
     envVars:
       - key: PYTHON_VERSION
         value: 3.11
-
