@@ -1,101 +1,141 @@
-<# ===========================
-   deploy_render.ps1
-   Déclenche un déploiement Render en poussant sur origin/main
-   et affiche le lien du dashboard.
-   =========================== #>
-
-# --- Helpers propres (sans caractères spéciaux) ---
-function Info($m){  Write-Host "[i] $m"  -ForegroundColor Cyan }
-function Ok($m){    Write-Host "[OK] $m" -ForegroundColor Green }
-function Warn($m){  Write-Host "[!] $m"  -ForegroundColor Yellow }
-function Err($m){   Write-Host "[X] $m"  -ForegroundColor Red }
+<# 
+  Déploiement automatique sur Railway (Dockerfile)
+  - Vérifie Dockerfile / requirements / Procfile (optionnel)
+  - Vérifie git & push
+  - Installe Railway CLI si besoin (via npm)
+  - Ouvre la connexion (login) Railway
+  - Déploie avec `railway up` en utilisant le Dockerfile
+#>
 
 param(
-    [string]$RenderServiceId  # Ex.: "srv-d3a...210" (avec ou sans "srv-")
+  [string]$ServiceName = "ydd-downloader",
+  [string]$Region = "eu",            # eu | us | ap (Railway choisit tout seul si non supporté)
+  [switch]$SetEnv,                   # ex: -SetEnv pour injecter des variables (voir $envs ci-dessous)
+  [string]$Branch = "main"
 )
 
-# 0) Paramètres & prérequis
-try {
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        throw "Git n'est pas installé ou pas dans le PATH."
-    }
+function Ok($m){ Write-Host "[OK] $m" -ForegroundColor Green }
+function Info($m){ Write-Host "[i] $m" -ForegroundColor Cyan }
+function Warn($m){ Write-Host "[!] $m" -ForegroundColor Yellow }
+function Err($m){ Write-Host "[X] $m" -ForegroundColor Red }
 
-    if (-not $RenderServiceId -or [string]::IsNullOrWhiteSpace($RenderServiceId)) {
-        $RenderServiceId = Read-Host "Entre l'ID du service Render (ex: srv-xxxxxxxxxxxx)"
-    }
-
-    # Normaliser: s'assurer que ça commence par 'srv-'
-    if ($RenderServiceId -notmatch '^srv-') {
-        $RenderServiceId = "srv-$RenderServiceId"
-    }
+# 0) Vérifs de base
+if (-not (Test-Path -Path ".\Dockerfile")) {
+  Err "Aucun Dockerfile trouvé à la racine. Ce script déploie via Dockerfile."
+  Err "Crée un Dockerfile ou renomme 'dockerfile' en 'Dockerfile'."
+  exit 1
 }
-catch {
-    Err $_.Exception.Message
+
+# 1) Git propre + push
+try {
+  git --version *>$null
+} catch {
+  Err "Git n'est pas installé dans PATH."
+  exit 1
+}
+
+# initialisation git si besoin
+if (-not (Test-Path ".git")) {
+  Info "Initialisation du repo git…"
+  git init | Out-Null
+  git add . ; git commit -m "init" | Out-Null
+}
+
+# vérifier remote
+$remoteUrl = (git remote get-url origin 2>$null)
+if ([string]::IsNullOrWhiteSpace($remoteUrl)) {
+  Warn "Aucun remote 'origin'. Ajoute ton repo GitHub maintenant."
+  $remoteCandidate = Read-Host "Colle l'URL de ton repo (ex: https://github.com/<user>/<repo>.git)"
+  if ([string]::IsNullOrWhiteSpace($remoteCandidate)) {
+    Err "Pas d'URL fournie."
     exit 1
+  }
+  git remote add origin $remoteCandidate
+  $remoteUrl = $remoteCandidate
+  Ok "Remote ajouté: $remoteUrl"
+} else {
+  Info "Remote origin: $remoteUrl"
 }
 
-# 1) Vérifier qu'on est dans un repo git et sur une branche
-try {
-    $null = git rev-parse --is-inside-work-tree 2>$null
-    if ($LASTEXITCODE -ne 0) { throw "Ce dossier n'est pas un dépôt Git." }
-
-    $branch = (git rev-parse --abbrev-ref HEAD).Trim()
-    if ([string]::IsNullOrWhiteSpace($branch)) { throw "Impossible d'identifier la branche courante." }
-
-    Info "Branche actuelle : $branch"
-}
-catch {
-    Err $_.Exception.Message
-    exit 1
+# branch courante => forcer $Branch si différent
+$currentBranch = (git branch --show-current)
+if ($currentBranch -ne $Branch) {
+  Info "Bascule sur branche '$Branch'…"
+  git checkout -B $Branch | Out-Null
 }
 
-# 2) Ajouter/commiter si nécessaire (ou commit vide pour déclencher Render)
-try {
-    $status = git status --porcelain
-    if ([string]::IsNullOrWhiteSpace($status)) {
-        Warn "Aucun changement détecté. Création d'un commit 'vide' pour déclencher Render…"
-        git commit --allow-empty -m "chore: trigger Render deploy" | Out-Null
+# commit si changements
+$changed = (git status --porcelain)
+if ($changed) {
+  Info "Changements détectés → commit…"
+  git add .
+  git commit -m "chore: prepare Railway deploy (Dockerfile)" | Out-Null
+} else {
+  Info "Aucun changement à committer."
+}
+
+Info "Push vers origin/$Branch…"
+git push -u origin $Branch
+if ($LASTEXITCODE -ne 0) { Err "Échec du push. Corrige puis relance."; exit 1 }
+Ok "Push effectué."
+
+# 2) Railway CLI
+function Has-Cmd($name){
+  $null -ne (Get-Command $name -ErrorAction SilentlyContinue)
+}
+
+if (-not (Has-Cmd "railway")) {
+  Warn "Railway CLI absent. Tentative d'installation via npm…"
+  if (Has-Cmd "npm") {
+    npm i -g @railway/cli
+    if (-not (Has-Cmd "railway")) {
+      Err "Installation CLI échouée. Installe Node/npm et refais: npm i -g @railway/cli"
+      exit 1
     }
-    else {
-        Info "Des changements sont détectés. Ajout & commit…"
-        git add -A
-        git commit -m "chore: trigger Render deploy" | Out-Null
-    }
-    Ok "Commit prêt."
-}
-catch {
-    Err "Commit impossible : $($_.Exception.Message)"
+    Ok "Railway CLI installé."
+  } else {
+    Err "npm n'est pas dispo. Installe Node.js (inclut npm) puis refais: npm i -g @railway/cli"
+    Start-Process "https://nodejs.org/en/download"
     exit 1
+  }
+} else {
+  Info "Railway CLI détecté."
 }
 
-# 3) Déterminer le remote et pousser
-try {
-    # S'assurer que 'origin' existe
-    $remotes = git remote
-    if ($remotes -notmatch '(^|\s)origin($|\s)') {
-        throw "Le remote 'origin' est introuvable. Configure-le avant de lancer ce script."
-    }
+# 3) Login Railway (ouvre le navigateur)
+Info "Connexion Railway (une page web va s’ouvrir)…"
+railway login
+if ($LASTEXITCODE -ne 0) { Err "Login Railway annulé/échoué."; exit 1 }
 
-    # Pousser sur main (si ta branche par défaut est 'main'; adapte si besoin)
-    Info "Push vers 'origin $branch'…"
-    git push -u origin $branch
-    if ($LASTEXITCODE -ne 0) { throw "Échec du push (voir erreurs ci-dessus)." }
-
-    Ok "Push réussi."
+# 4) Optionnel : variables d'environnement à pousser sur Railway
+# Mets tes variables ici si tu passes -SetEnv au script
+$envs = @{
+  # "FLASK_ENV" = "production"
+  # "SECRET_KEY" = "change_me"
+  # "SOME_API_KEY" = "..."
 }
-catch {
-    Err $_.Exception.Message
-    exit 1
-}
-
-# 4) Afficher le lien du dashboard Render pour suivre le déploiement
-try {
-    $dashUrl = "https://dashboard.render.com/web/$RenderServiceId"
-    Info "Déploiement déclenché. Suis la progression ici : $dashUrl"
-}
-catch {
-    Warn "Impossible de composer l'URL du dashboard Render."
+if ($SetEnv -and $envs.Count -gt 0) {
+  Info "Injection des variables d'environnement Railway…"
+  foreach ($k in $envs.Keys) {
+    railway variables set "$($k)=$($envs[$k])"
+    if ($LASTEXITCODE -ne 0) { Warn "Impossible de définir la variable $k (tu pourras la mettre dans le dashboard Railway)." }
+  }
 }
 
-# Fin
+# 5) Déploiement (Dockerfile auto-détecté)
+# Astuce: si l'app écoute sur un port, Railway attend $PORT fourni par la plateforme.
+# Assure-toi que ton CMD/entrypoint utilise $PORT (gunicorn app:app -b 0.0.0.0:$PORT)
+Info "Déploiement en cours (railway up)…"
+railway up --service $ServiceName --detach
+if ($LASTEXITCODE -ne 0) {
+  Warn "railway up non supporté sur ton compte/plan ?"
+  Warn "Ouverture du dashboard pour déployer manuellement depuis GitHub (Dockerfile détecté automatiquement)…"
+  Start-Process "https://railway.app/new"
+  Ok "Dans Railway : New Project → Deploy from GitHub → choisis ton repo → confirme."
+  exit 0
+}
+
+Ok "Déploiement demandé. Ouvre le dashboard pour voir les logs:"
+$dash = "https://railway.app/project"
+Write-Host "   $dash" -ForegroundColor Cyan
 Ok "Terminé."
