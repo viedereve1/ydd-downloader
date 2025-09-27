@@ -42,3 +42,7 @@ def download():
         return send_file(filepath, as_attachment=True, download_name=filename)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/ui")
+def ui():
+    return render_template("index.html")

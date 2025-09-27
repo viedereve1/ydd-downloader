@@ -1,12 +1,72 @@
 ﻿<!doctype html>
-<html>
-  <head><meta charset="utf-8"><title>YDD</title></head>
-  <body style="font-family:system-ui;margin:40px;">
-    <h2>YDD Downloader</h2>
-    <form action="/download" method="get">
-      <input type="url" name="url" placeholder="https://..." style="width:460px" required>
-      <button type="submit">Download</button>
-    </form>
-    <p style="margin-top:12px;color:#666">Tip: audio only by default (fast). Change in app.py if you want video.</p>
-  </body>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>YDD Downloader</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>YDD Downloader</h1>
+      <p class="tag">Télécharge audio / vidéo rapidement</p>
+    </header>
+
+    <main class="card">
+      <label class="lbl" for="url">Lien (YouTube, etc.)</label>
+      <input id="url" class="inp" placeholder="https://www.youtube.com/watch?v=..." />
+
+      <div class="row">
+        <div class="col">
+          <label class="lbl" for="format">Format</label>
+          <select id="format" class="inp">
+            <option value="audio">Audio</option>
+            <option value="video">Vidéo</option>
+          </select>
+        </div>
+        <div class="col">
+          <label class="lbl" for="quality">Qualité</label>
+          <select id="quality" class="inp">
+            <option value="best">Meilleure</option>
+            <option value="medium">Moyenne</option>
+            <option value="low">Basse</option>
+          </select>
+        </div>
+      </div>
+
+      <button id="btn" class="btn">Télécharger</button>
+
+      <div id="msg" class="msg"></div>
+    </main>
+
+    <footer>
+      <small>Propulsé par yt-dlp &amp; Flask   YDD</small>
+    </footer>
+  </div>
+
+  <script>
+  const btn = document.getElementById('btn');
+  const url = document.getElementById('url');
+  const format = document.getElementById('format');
+  const quality = document.getElementById('quality');
+  const msg = document.getElementById('msg');
+
+  function note(t, ok=true){
+    msg.textContent = t;
+    msg.className = 'msg ' + (ok ? 'ok' : 'err');
+  }
+
+  btn.addEventListener('click', () => {
+    const u = url.value.trim();
+    if(!u){ note("Entre un lien valide.", false); return; }
+    note("Préparation du téléchargement");
+    // On redirige le navigateur vers /download pour déclencher la réponse de fichier côté serveur
+    const qs = new URLSearchParams({ url: u, format: format.value, quality: quality.value });
+    window.location.href = `/download?${qs.toString()}`;
+    // Astuce UX : message persistant si latence
+    setTimeout(()=>note("Si rien ne se passe, patiente encore quelques secondes"), 3000);
+  });
+  </script>
+</body>
 </html>
