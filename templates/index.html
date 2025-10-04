@@ -1,0 +1,142 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>YDD Downloader</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <span class="badge">YDD Downloader</span>
+        <h1>Audio & Vidéo  multi-plateformes</h1>
+      </div>
+
+      <p class="help">
+        Colle un lien (<strong>YouTube</strong>, <strong>Instagram</strong>, <strong>TikTok</strong>, <strong>Facebook</strong>), choisis <em>Audio</em> ou <em>Vidéo</em>, puis clique <strong>Download</strong>.
+      </p>
+
+      <div class="row">
+        <input id="url" class="input" type="url" placeholder="https:// (YouTube / Instagram / TikTok / Facebook)"/>
+        <select id="mode" class="select">
+          <option value="video" selected>Vidéo</option>
+          <option value="audio">Audio (mp3)</option>
+        </select>
+        <button id="go" class="btn">Download</button>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progressbar"><div id="bar"></div></div>
+        <div class="progress-meta">
+          <span id="percent">0%</span>
+          <span id="speed"></span>
+        </div>
+        <div id="status" class="status">Prêt.</div>
+      </div>
+
+      <p class="footer">
+        <span class="hint">Astuce :</span> si YouTube/Instagram demandent une connexion, configure <code>COOKIES_B64</code> côté serveur (cookies Netscape encodés Base64).
+      </p>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = sel => document.querySelector(sel);
+  const urlEl = $('#url');
+  const modeEl = $('#mode');
+  const goEl   = $('#go');
+  const barEl  = $('#bar');
+  const pctEl  = $('#percent');
+  const spdEl  = $('#speed');
+  const stEl   = $('#status');
+
+  let timer = null;
+
+  function setStatus(txt, cls=''){
+    stEl.className = 'status ' + (cls||'');
+    stEl.textContent = txt;
+  }
+  function setPct(n){
+    const v = Math.max(0, Math.min(100, n|0));
+    barEl.style.width = v + '%';
+    pctEl.textContent = v + '%';
+  }
+
+  async function startJob(){
+    const url = urlEl.value.trim();
+    const mode = modeEl.value;
+    if(!url){ urlEl.focus(); return; }
+
+    goEl.disabled = true;
+    setPct(0); setStatus('Démarrage'); spdEl.textContent = '';
+
+    try{
+      const r = await fetch('/start', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ url, mode })
+      });
+      if(!r.ok) throw new Error('start HTTP ' + r.status);
+      const j = await r.json();
+      if(!j.job_id) throw new Error('Réponse invalide');
+
+      poll(j.job_id);
+    }catch(err){
+      console.error(err);
+      setStatus('Erreur de démarrage : ' + err.message, 'err');
+      goEl.disabled = false;
+    }
+  }
+
+  async function poll(id){
+    clearInterval(timer);
+    timer = setInterval(async ()=>{
+      try{
+        const r = await fetch('/progress/' + id);
+        if(!r.ok) throw new Error('progress HTTP ' + r.status);
+        const j = await r.json();
+
+        // Attendu: {status, pct, speed, fname, error}
+        if(j.pct != null) setPct(j.pct);
+        if(j.speed){ spdEl.textContent = j.speed; }
+
+        if(j.status === 'downloading'){
+          setStatus('Téléchargement en cours');
+        }else if(j.status === 'processing'){
+          setStatus('Traitement');
+        }else if(j.status === 'finished'){
+          setPct(100);
+          setStatus('Terminé ', 'ok');
+          clearInterval(timer);
+          if(j.fname){
+            const a = document.createElement('a');
+            a.href = '/file/' + encodeURIComponent(j.fname);
+            a.download = j.fname;
+            a.click();
+          }
+          goEl.disabled = false;
+        }else if(j.status === 'error'){
+          setStatus(j.error || 'Erreur pendant le téléchargement', 'err');
+          clearInterval(timer);
+          goEl.disabled = false;
+        }else{
+          setStatus('En attente');
+        }
+      }catch(err){
+        console.error(err);
+        setStatus('Erreur de suivi : ' + err.message, 'err');
+        clearInterval(timer);
+        goEl.disabled = false;
+      }
+    }, 800);
+  }
+
+  goEl.addEventListener('click', startJob);
+  urlEl.addEventListener('keydown', e=>{ if(e.key==='Enter') startJob(); });
+})();
+</script>
+</body>
+</html>
