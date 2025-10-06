@@ -1,142 +1,138 @@
-﻿<!DOCTYPE html>
+﻿<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>YDD Downloader</title>
-  <link rel="stylesheet" href="/static/style.css"/>
+  <style>
+    :root { --bg:#0f172a; --panel:#0b1220; --txt:#e2e8f0; --muted:#94a3b8; --brand:#14b8a6; --danger:#ef4444; }
+    *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,#0b1020,#0f172a);color:var(--txt);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu}
+    .wrap{max-width:920px;margin:48px auto;padding:0 16px}
+    .card{background:radial-gradient(1200px 700px at 10% 0%,#0e1930 0%,#0b1220 35%,#0a1020 100%);border:1px solid rgba(148,163,184,.12);border-radius:18px;box-shadow:0 10px 40px rgba(2,6,23,.35);padding:24px}
+    h1{margin:0 0 8px;font-weight:800;letter-spacing:.2px} .sub{color:var(--muted);margin-bottom:16px}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    input,select,button{height:44px;border-radius:10px;border:1px solid rgba(148,163,184,.18);background:#0c1526;color:var(--txt);padding:0 12px}
+    input{flex:1;min-width:240px} select{width:120px}
+    button{background:var(--brand);border:none;color:#062a27;font-weight:700;padding:0 18px;cursor:pointer}
+    button[disabled]{opacity:.6;cursor:not-allowed}
+    .bar{height:8px;background:#101a2e;border-radius:999px;overflow:hidden;margin:14px 0 6px}
+    .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#22d3ee,#14b8a6)}
+    .muted{color:var(--muted);font-size:.92rem}
+    .error{color:var(--danger);white-space:pre-wrap}
+    .history{margin-top:18px}
+    .item{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px dashed rgba(148,163,184,.18)}
+    .badge{font-size:.74rem;background:#0f1b31;border:1px solid rgba(148,163,184,.18);padding:4px 8px;border-radius:999px;color:#93c5fd}
+    a.dl{color:#22d3ee;text-decoration:none}
+  </style>
 </head>
 <body>
-  <div class="container">
+  <div class="wrap">
     <div class="card">
-      <div class="header">
-        <span class="badge">YDD Downloader</span>
-        <h1>Audio & Vidéo  multi-plateformes</h1>
-      </div>
-
-      <p class="help">
-        Colle un lien (<strong>YouTube</strong>, <strong>Instagram</strong>, <strong>TikTok</strong>, <strong>Facebook</strong>), choisis <em>Audio</em> ou <em>Vidéo</em>, puis clique <strong>Download</strong>.
-      </p>
+      <div class="badge">YDD Downloader</div>
+      <h1>Audio & Vidéo multi-plateformes</h1>
+      <div class="sub">Colle un lien (YouTube, Instagram, TikTok, Facebook), choisis <b>Audio</b> ou <b>Vidéo</b>, puis clique <b>Download</b>.</div>
 
       <div class="row">
-        <input id="url" class="input" type="url" placeholder="https:// (YouTube / Instagram / TikTok / Facebook)"/>
-        <select id="mode" class="select">
+        <input id="url" placeholder="https://..." spellcheck="false" />
+        <select id="mode">
           <option value="video" selected>Vidéo</option>
-          <option value="audio">Audio (mp3)</option>
+          <option value="audio">Audio</option>
         </select>
-        <button id="go" class="btn">Download</button>
+        <button id="go">Download</button>
       </div>
 
-      <div class="progress-wrap">
-        <div class="progressbar"><div id="bar"></div></div>
-        <div class="progress-meta">
-          <span id="percent">0%</span>
-          <span id="speed"></span>
-        </div>
-        <div id="status" class="status">Prêt.</div>
+      <div class="bar"><i id="bar"></i></div>
+      <div class="row" style="justify-content:space-between">
+        <div class="muted"><span id="status">0%</span></div>
+        <div class="muted"><span id="speed"></span></div>
       </div>
 
-      <p class="footer">
-        <span class="hint">Astuce :</span> si YouTube/Instagram demandent une connexion, configure <code>COOKIES_B64</code> côté serveur (cookies Netscape encodés Base64).
-      </p>
+      <div id="msg" class="error"></div>
+
+      <div class="history" id="history"></div>
+
+      <div class="muted" style="margin-top:14px">
+        Astuce : si YouTube/Instagram demandent une connexion, configure <code>COOKIES_B64</code> côté serveur (cookies Netscape encodés Base64).
+      </div>
     </div>
   </div>
 
-<script>
-(() => {
-  const $ = sel => document.querySelector(sel);
-  const urlEl = $('#url');
-  const modeEl = $('#mode');
-  const goEl   = $('#go');
-  const barEl  = $('#bar');
-  const pctEl  = $('#percent');
-  const spdEl  = $('#speed');
-  const stEl   = $('#status');
+  <script>
+    const urlEl    = document.getElementById('url');
+    const goEl     = document.getElementById('go');
+    const barEl    = document.getElementById('bar');
+    const statusEl = document.getElementById('status');
+    const speedEl  = document.getElementById('speed');
+    const histEl   = document.getElementById('history');
+    const modeEl   = document.getElementById('mode');
 
-  let timer = null;
-
-  function setStatus(txt, cls=''){
-    stEl.className = 'status ' + (cls||'');
-    stEl.textContent = txt;
-  }
-  function setPct(n){
-    const v = Math.max(0, Math.min(100, n|0));
-    barEl.style.width = v + '%';
-    pctEl.textContent = v + '%';
-  }
-
-  async function startJob(){
-    const url = urlEl.value.trim();
-    const mode = modeEl.value;
-    if(!url){ urlEl.focus(); return; }
-
-    goEl.disabled = true;
-    setPct(0); setStatus('Démarrage'); spdEl.textContent = '';
-
-    try{
-      const r = await fetch('/start', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ url, mode })
-      });
-      if(!r.ok) throw new Error('start HTTP ' + r.status);
-      const j = await r.json();
-      if(!j.job_id) throw new Error('Réponse invalide');
-
-      poll(j.job_id);
-    }catch(err){
-      console.error(err);
-      setStatus('Erreur de démarrage : ' + err.message, 'err');
-      goEl.disabled = false;
+    function setProgress(pct, text, speed){
+      barEl.style.width = (pct || 0) + '%';
+      statusEl.textContent = (pct || 0) + '% ' + (text || '');
+      speedEl.textContent = speed || '';
     }
-  }
 
-  async function poll(id){
-    clearInterval(timer);
-    timer = setInterval(async ()=>{
-      try{
-        const r = await fetch('/progress/' + id);
-        if(!r.ok) throw new Error('progress HTTP ' + r.status);
-        const j = await r.json();
+    function addHistory(entry){
+      const d = document.createElement('div');
+      d.className = 'item';
+      d.innerHTML = '<span class="badge">'+ entry.mode +'</span><span class="muted" style="flex:1">'+ entry.url +'</span>' +
+                    (entry.href ? '<a class="dl" href="'+ entry.href +'">Télécharger</a>' : '');
+      histEl.prepend(d);
+    }
 
-        // Attendu: {status, pct, speed, fname, error}
-        if(j.pct != null) setPct(j.pct);
-        if(j.speed){ spdEl.textContent = j.speed; }
-
-        if(j.status === 'downloading'){
-          setStatus('Téléchargement en cours');
-        }else if(j.status === 'processing'){
-          setStatus('Traitement');
-        }else if(j.status === 'finished'){
-          setPct(100);
-          setStatus('Terminé ', 'ok');
-          clearInterval(timer);
-          if(j.fname){
-            const a = document.createElement('a');
-            a.href = '/file/' + encodeURIComponent(j.fname);
-            a.download = j.fname;
-            a.click();
-          }
-          goEl.disabled = false;
-        }else if(j.status === 'error'){
-          setStatus(j.error || 'Erreur pendant le téléchargement', 'err');
-          clearInterval(timer);
-          goEl.disabled = false;
-        }else{
-          setStatus('En attente');
+    async function poll(job){
+      let lastPct = 0;
+      while (true){
+        const r = await fetch('/api/status/' + job);
+        const s = await r.json();
+        if (s.status === 'downloading'){
+          lastPct = Math.max(lastPct, Math.round(s.pct || 0));
+          setProgress(lastPct, s.text || 'Téléchargement', s.speed || '');
+        } else if (s.status === 'finished'){
+          setProgress(100, 'Terminé', '');
+          addHistory({ url: s.url, mode: s.mode, href: '/result/' + job });
+          // auto-téléchargement
+          window.location.href = '/result/' + job;
+          break;
+        } else if (s.status === 'error'){
+          document.getElementById('msg').textContent = s.message || 'Erreur.';
+          setProgress(0, 'Erreur', '');
+          break;
+        } else {
+          // unknown / queued
+          setProgress(lastPct, 'Préparation', '');
         }
-      }catch(err){
-        console.error(err);
-        setStatus('Erreur de suivi : ' + err.message, 'err');
-        clearInterval(timer);
-        goEl.disabled = false;
+        await new Promise(t => setTimeout(t, 1000));
       }
-    }, 800);
-  }
+    }
 
-  goEl.addEventListener('click', startJob);
-  urlEl.addEventListener('keydown', e=>{ if(e.key==='Enter') startJob(); });
-})();
-</script>
+    async function startDownload(){
+      document.getElementById('msg').textContent = '';
+      setProgress(0, 'Préparation', '');
+      goEl.disabled = true;
+      try{
+        const body = { url: urlEl.value.trim(), mode: modeEl.value };
+        const r = await fetch('/api/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const j = await r.json();
+        if (!r.ok){ throw new Error(j.error || 'Erreur serveur'); }
+        addHistory({ url: body.url, mode: body.mode, href: '' });
+        poll(j.job_id);
+      }catch(e){
+        document.getElementById('msg').textContent = String(e);
+        goEl.disabled = false;
+        setProgress(0, 'Erreur', '');
+      }finally{
+        // re-active quand le polling finira
+        setTimeout(() => { goEl.disabled = false; }, 1500);
+      }
+    }
+
+    goEl.addEventListener('click', startDownload);
+    urlEl.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ startDownload(); }});
+  </script>
 </body>
 </html>
